@@ -1,7 +1,9 @@
-# 🧠 React Mindmap App
+# 🧠 FinnoMind App
+
+![Image alt](https://github.com/aadityanaik007/FinnoMind/blob/485f75d9e57b8badaea369d375e4c0a8aa2d57e6/mind-map-generated.jpg)
+
 
 A full-stack mind mapping web application built with:
-
 - **Frontend**: Next.js (React)
 - **Backend**: FastAPI
 - **Worker**: Celery (Python)
