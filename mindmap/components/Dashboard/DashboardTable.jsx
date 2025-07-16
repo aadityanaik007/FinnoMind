@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import DropDown from "../DropDown/DropDown";
 import TickerDropDown from "../DropDown/TickerDropDown";
 import { startPollingStatus, stopPollingStatus } from "../utils/statusPolling";
+
 import {
   handleAddRow,
   handleSave,
   handleDelete,
 } from "../utils/dashboardHandlers";
 import { getButtonStyle } from "./buttonStyles";
-import { TOPICS, TICKERS } from "../utils/constants";
+import { TOPICS, TICKERS } from "../../constants/UserDashboard";
 
 const DashboardTable = () => {
   const router = useRouter();
@@ -36,7 +37,6 @@ const DashboardTable = () => {
         if (Array.isArray(mindmaps)) {
           setData(mindmaps);
 
-          // ✅ After setting data, poll unfinished rows
           mindmaps.forEach((row) => {
             if (row.status === "pending" || row.status === "processing") {
               startPollingStatus(row.id);
