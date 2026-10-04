@@ -20,29 +20,51 @@ const DropDown = ({ options, value, onChange, maxSelection = 2 }) => {
       value={formattedOptions.filter((opt) => value.includes(opt.value))}
       onChange={handleChange}
       isMulti
-      menuPortalTarget={document.body} // 👈 THIS IS MAGIC: forces dropdown OUTSIDE the table
+      placeholder="Select topics..."
+      menuPortalTarget={document.body}
       styles={{
         menuPortal: (base) => ({ ...base, zIndex: 9999 }),
         control: (base) => ({
           ...base,
-          backgroundColor: "rgba(33,79,149,0.95)",
-          color: "white",
-          border: "1px solid white",
+          backgroundColor: "rgba(15,23,42,0.9)",
+          color: "#e2e8f0",
+          border: "1px solid rgba(148,163,184,0.2)",
+          borderRadius: "8px",
+          minHeight: "38px",
+          boxShadow: "none",
+          "&:hover": { borderColor: "rgba(59,130,246,0.5)" },
         }),
         menu: (base) => ({
           ...base,
-          backgroundColor: "rgba(33,79,149,1)",
-          color: "white",
+          backgroundColor: "#1e293b",
+          border: "1px solid rgba(148,163,184,0.15)",
+          borderRadius: "8px",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
         }),
         option: (base, { isFocused }) => ({
           ...base,
-          backgroundColor: isFocused ? "#2a63b8" : "rgba(33,79,149,1)",
-          color: "white",
+          backgroundColor: isFocused ? "rgba(59,130,246,0.2)" : "transparent",
+          color: "#e2e8f0",
+          fontSize: "13px",
         }),
         multiValue: (base) => ({
           ...base,
-          backgroundColor: "#2a63b8",
+          backgroundColor: "rgba(59,130,246,0.2)",
+          borderRadius: "4px",
+          border: "1px solid rgba(59,130,246,0.3)",
         }),
+        multiValueLabel: (base) => ({
+          ...base,
+          color: "#93c5fd",
+          fontSize: "12px",
+        }),
+        multiValueRemove: (base) => ({
+          ...base,
+          color: "#93c5fd",
+          "&:hover": { backgroundColor: "rgba(239,68,68,0.3)", color: "#fff" },
+        }),
+        placeholder: (base) => ({ ...base, color: "#64748b", fontSize: "13px" }),
+        input: (base) => ({ ...base, color: "#e2e8f0" }),
       }}
     />
   );

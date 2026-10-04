@@ -8,16 +8,19 @@ const TickerDropDown = ({ options, value, onChange }) => {
       value={value || ""}
       onChange={(e) => onChange(e.target.value)}
       style={{
-        minHeight: "40px",
-        width: "200px",
-        backgroundColor: "#214f95",
-        color: "white",
-        border: "1px solid white",
-        borderRadius: "6px",
-        padding: "8px",
+        minHeight: "38px",
+        width: "140px",
+        backgroundColor: "rgba(15,23,42,0.9)",
+        color: "#e2e8f0",
+        border: "1px solid rgba(148,163,184,0.2)",
+        borderRadius: "8px",
+        padding: "6px 10px",
+        fontSize: "13px",
+        cursor: "pointer",
+        outline: "none",
       }}
     >
-      <option value="">Select Ticker</option>
+      <option value="">Select ticker...</option>
       {options.map((ticker) => (
         <option key={ticker} value={ticker}>
           {ticker}

@@ -1,47 +1,49 @@
-import {
-  createMindmap,
-  deleteMindmap,
-  getMindmapStatus,
-} from "../../api/mindmapApi";
-import { stopPollingStatus } from "./statusPolling";
+import { createMindmap, updateMindmap } from "../../api/mindmapApi";
+
 export const handleAddRow = (
   data,
   editingId,
   setData,
   setEditingId,
-  setNewRowData
+  setNewRowData,
+  setEditMode
 ) => {
   if (editingId !== null) {
-    const existingRow = data.find((row) => row.id === editingId);
-
-    if (
-      !existingRow.topic.length ||
-      !existingRow.ticker ||
-      !existingRow.range.startDate ||
-      !existingRow.range.endDate
-    ) {
-      alert("⚠️ Please complete the current row before adding a new one!");
-      return;
-    }
+    alert("Please complete or save the current row before adding a new one.");
+    return;
   }
 
   const newId = Date.now();
   const newRow = {
     id: newId,
-    topic: [],
-    ticker: "",
-    range: { startDate: "", endDate: "" },
-    status: "pending",
+    name: "",
+    description: "",
+    status: "New",
+    node_count: 0,
+    article_count: 0,
     isNew: true,
   };
 
   setData([newRow, ...data]);
   setEditingId(newId);
-  setNewRowData({
-    topic: "",
-    ticker: "",
-    range: { startDate: "", endDate: "" },
-  });
+  setNewRowData({ name: "", description: "" });
+  if (setEditMode) setEditMode("create");
+};
+
+export const handleEdit = (
+  row,
+  editingId,
+  setEditingId,
+  setNewRowData,
+  setEditMode
+) => {
+  if (editingId !== null) {
+    alert("Please complete or save the current row before editing another.");
+    return;
+  }
+  setEditingId(row.id);
+  setNewRowData({ name: row.name || "", description: row.description || "" });
+  if (setEditMode) setEditMode("edit");
 };
 
 export const handleSave = async (
@@ -49,80 +51,97 @@ export const handleSave = async (
   newRowData,
   setData,
   setEditingId,
-  setNewRowData
+  setNewRowData,
+  editMode
 ) => {
-  console.log(
-    "Saving mindmap with data startDate:==",
-    newRowData.range.startDate
-  );
+  if (!newRowData.name.trim()) {
+    alert("Name is required.");
+    return;
+  }
 
-  const newRow = {
-    topic: newRowData.topic,
-    ticker: newRowData.ticker,
-    range: {
-      startdate: newRowData.range.startDate
-        ? newRowData.range.startDate.split("T")[0]
-        : "",
-      enddate: newRowData.range.endDate
-        ? newRowData.range.endDate.split("T")[0]
-        : "",
-    },
-    status: "pending",
-  };
-
-  try {
-    const result = await createMindmap(newRow);
-
-    if (result.success) {
-      const generatedId = result.id;
-
+  if (editMode === "edit") {
+    try {
+      await updateMindmap(tempId, {
+        name: newRowData.name.trim(),
+        description: newRowData.description.trim(),
+      });
       setData((prev) =>
         prev.map((row) =>
-          row.id === tempId ? { ...row, id: generatedId, ...newRow } : row
+          row.id === tempId
+            ? {
+                ...row,
+                name: newRowData.name.trim(),
+                description: newRowData.description.trim(),
+              }
+            : row
         )
       );
-
-      const intervalId = setInterval(async () => {
-        const statusResult = await getMindmapStatus(generatedId);
-
-        if (["done", "error"].includes(statusResult.status)) {
-          clearInterval(intervalId);
-          setData((prev) =>
-            prev.map((row) =>
-              row.id === generatedId
-                ? { ...row, status: statusResult.status }
-                : row
-            )
-          );
-        }
-      }, 3000);
+    } catch (error) {
+      console.error("Failed to update mindmap", error);
     }
-  } catch (error) {
-    console.error("Failed to save mindmap", error);
+  } else {
+    try {
+      const result = await createMindmap({
+        name: newRowData.name.trim(),
+        description: newRowData.description.trim(),
+      });
+
+      if (result.success) {
+        setData((prev) =>
+          prev.map((row) =>
+            row.id === tempId
+              ? {
+                  ...row,
+                  id: result.id,
+                  name: newRowData.name.trim(),
+                  description: newRowData.description.trim(),
+                  status: "New",
+                  node_count: 0,
+                  article_count: 0,
+                  isNew: false,
+                }
+              : row
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Failed to save mindmap", error);
+    }
   }
 
   setEditingId(null);
-  setNewRowData({
-    topic: "",
-    ticker: "",
-    range: { startDate: "", endDate: "" },
-  });
+  setNewRowData({ name: "", description: "" });
+};
+
+export const handleCancelEdit = (
+  editingId,
+  editMode,
+  setData,
+  setEditingId,
+  setNewRowData
+) => {
+  if (editMode === "create") {
+    setData((prev) => prev.filter((r) => r.id !== editingId));
+  }
+  setEditingId(null);
+  setNewRowData({ name: "", description: "" });
 };
 
 export const handleDelete = async (id, setData) => {
   if (!confirm("Are you sure you want to delete this mindmap?")) {
-    return;
+    return false;
   }
 
   try {
-    const result = await deleteMindmap(id);
+    const res = await fetch(`http://localhost:8000/api/mindmap/${id}`, {
+      method: "DELETE",
+    });
 
-    if (result.success) {
-      stopPollingStatus(id); // ✅ STOP POLLING for that id
+    if (res.ok) {
       setData((prev) => prev.filter((row) => row.id !== id));
       return true;
     } else {
-      console.error("Failed to delete mindmap");
+      console.error("Failed to delete mindmap:", res.status);
       return false;
     }
   } catch (error) {

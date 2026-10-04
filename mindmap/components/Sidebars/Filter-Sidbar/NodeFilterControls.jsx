@@ -3,21 +3,10 @@
 import React, { useState, useEffect } from "react";
 
 const NodeFilterControls = ({ nodes, visibleNodeIds, setVisibleNodeIds }) => {
-  const [isOpen, setIsOpen] = useState(true);
   const [checked, setChecked] = useState({});
 
-  // Filter only true month nodes (no sources inside) and valid sources (no articles)
-  const monthNodes = nodes.filter(
-    (n) =>
-      n.id.includes("month") && !n.id.includes("source") && isNaN(n.data?.label)
-  );
-
-  const sourceNodes = nodes.filter(
-    (n) =>
-      n.id.includes("source") &&
-      !n.id.includes("article") &&
-      isNaN(n.data?.label)
-  );
+  const monthNodes = nodes.filter((n) => n.data?.isMonthNode);
+  const sourceNodes = nodes.filter((n) => n.data?.isSourceNode);
 
   useEffect(() => {
     const initialChecked = {};
@@ -37,100 +26,105 @@ const NodeFilterControls = ({ nodes, visibleNodeIds, setVisibleNodeIds }) => {
     toggle(nodeId, newChecked[nodeId]);
 
     if (type === "month") {
-      // Toggle sources and articles under this month
       const linkedSources = nodes.filter(
-        (n) => n.id.startsWith(`${nodeId}-source`) && !n.id.includes("article")
+        (n) => n.data?.isSourceNode && n.id.startsWith(`${nodeId}-source`)
       );
-
       linkedSources.forEach((source) => {
         toggle(source.id, newChecked[nodeId]);
         newChecked[source.id] = newChecked[nodeId];
-
-        const linkedArticles = nodes.filter((a) =>
-          a.id.startsWith(`${source.id}-article`)
-        );
-        linkedArticles.forEach((article) => {
-          toggle(article.id, newChecked[nodeId]);
-          newChecked[article.id] = newChecked[nodeId];
-        });
+        nodes
+          .filter((a) => a.id.startsWith(`${source.id}-article`))
+          .forEach((article) => {
+            toggle(article.id, newChecked[nodeId]);
+            newChecked[article.id] = newChecked[nodeId];
+          });
       });
     }
 
     if (type === "source") {
-      // Toggle only articles under this source
-      const linkedArticles = nodes.filter((a) =>
-        a.id.startsWith(`${nodeId}-article`)
-      );
-      linkedArticles.forEach((article) => {
-        toggle(article.id, newChecked[nodeId]);
-        newChecked[article.id] = newChecked[nodeId];
-      });
+      nodes
+        .filter((a) => a.id.startsWith(`${nodeId}-article`))
+        .forEach((article) => {
+          toggle(article.id, newChecked[nodeId]);
+          newChecked[article.id] = newChecked[nodeId];
+        });
     }
 
     setChecked(newChecked);
     setVisibleNodeIds(Array.from(updatedVisible));
   };
 
-  const renderSection = (label, nodes, type) => (
-    <div style={{ marginBottom: "1rem" }}>
-      <h4 style={{ marginBottom: "0.5rem", color: "#333" }}>{label}</h4>
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        {nodes.map((n) => (
-          <label key={n.id} style={{ display: "flex", gap: "0.5rem" }}>
-            <input
-              type="checkbox"
-              checked={checked[n.id] || false}
-              onChange={() => handleToggle(n.id, type)}
-            />
-            <span>{n.data?.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div
       style={{
         position: "absolute",
-        top: 0,
-        left: 0,
-        height: "100%",
-        backgroundColor: "#f1f1f1",
-        width: isOpen ? "260px" : "40px",
-        padding: isOpen ? "16px" : "0",
-        overflowY: "auto",
-        borderRight: "1px solid #ccc",
-        transition: "width 0.3s ease",
+        top: "12px",
+        left: "12px",
         zIndex: 99,
+        display: "flex",
+        gap: "6px",
+        flexWrap: "wrap",
+        maxWidth: "calc(100% - 400px)",
       }}
     >
-      <button
-        onClick={() => setIsOpen((prev) => !prev)}
-        style={{
-          position: "absolute",
-          top: "10px",
-          right: "0px",
-          backgroundColor: "#214f95",
-          color: "white",
-          border: "none",
-          borderRadius: "50%",
-          width: "32px",
-          height: "32px",
-          fontSize: "16px",
-          cursor: "pointer",
-        }}
-      >
-        {isOpen ? "←" : "→"}
-      </button>
+      {monthNodes.map((n) => (
+        <button
+          key={n.id}
+          onClick={() => handleToggle(n.id, "month")}
+          style={{
+            padding: "5px 12px",
+            borderRadius: "6px",
+            border: checked[n.id]
+              ? "1px solid rgba(139,92,246,0.4)"
+              : "1px solid rgba(148,163,184,0.15)",
+            background: checked[n.id]
+              ? "rgba(139,92,246,0.15)"
+              : "rgba(15,23,42,0.4)",
+            backdropFilter: "blur(8px)",
+            color: checked[n.id] ? "#c4b5fd" : "#475569",
+            fontSize: "12px",
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+        >
+          {n.data?.label}
+        </button>
+      ))}
 
-      {isOpen && (
-        <>
-          <h3 style={{ fontSize: "16px", marginBottom: "1rem" }}>Filter</h3>
-          {renderSection("Months", monthNodes, "month")}
-          {renderSection("Sources", sourceNodes, "source")}
-        </>
-      )}
+      <div
+        style={{
+          width: "1px",
+          background: "rgba(148,163,184,0.15)",
+          alignSelf: "stretch",
+          margin: "0 2px",
+        }}
+      />
+
+      {sourceNodes.map((n) => (
+        <button
+          key={n.id}
+          onClick={() => handleToggle(n.id, "source")}
+          style={{
+            padding: "5px 12px",
+            borderRadius: "6px",
+            border: checked[n.id]
+              ? "1px solid rgba(59,130,246,0.4)"
+              : "1px solid rgba(148,163,184,0.15)",
+            background: checked[n.id]
+              ? "rgba(59,130,246,0.12)"
+              : "rgba(15,23,42,0.4)",
+            backdropFilter: "blur(8px)",
+            color: checked[n.id] ? "#93c5fd" : "#475569",
+            fontSize: "12px",
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+        >
+          {n.data?.label?.replace(/ \(\d+\)/, "")}
+        </button>
+      ))}
     </div>
   );
 };

@@ -1,0 +1,39 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/env/
+Backend-FINN/env/
+
+# Dependencies
+node_modules/
+nextjs-mindmap/node_modules/
+
+# Build outputs
+.next/
+nextjs-mindmap/.next/
+build/
+dist/
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+.pytest_cache/
+backend/tests/
+backend/pytest.ini
+
+# Data
+mindmap/data
+backend/mongo_articles/
+
+# Directories
+Backend-FINN/
+Data-Extractor/
+
+# OS
+*.DS_Store
+.dockerignore

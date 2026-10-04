@@ -1,122 +1,116 @@
 import pandas as pd
+import math
 from datetime import datetime
-from build.mind_map_utils import get_article_position
+
 
 def build_mindmap_base(mindmap_data, articles):
     nodes = []
     edges = []
 
     df = pd.DataFrame(articles)
-    # Parse date and filter
     start_date = datetime.strptime(mindmap_data["range"]["startdate"], "%Y-%m-%d")
-    end_date = datetime.strptime(mindmap_data["range"]["enddate"], "%Y-%m-%d")
-    df["time_published_dt"] = df["time_published"].apply(lambda x: datetime.strptime(x, "%Y%m%dT%H%M%S"))
-    df = df[(df["time_published_dt"] >= start_date) & (df["time_published_dt"] <= end_date)]
+    end_date = datetime.strptime(mindmap_data["range"]["enddate"], "%Y-%m-%d").replace(hour=23, minute=59, second=59)
 
-    # ✅ Force consistent 3-letter month format
-    df["month"] = df["time_published_dt"].dt.strftime("%b")
-    # ---- 1. Topic + Ticker Nodes
-    left_nodes = mindmap_data["topic"] + [mindmap_data["ticker"]]
-    topic_and_ticker_ids = []
+    if not df.empty and "time_published" in df.columns:
+        df["time_published_dt"] = df["time_published"].apply(lambda x: datetime.strptime(x, "%Y%m%dT%H%M%S"))
+        df = df[(df["time_published_dt"] >= start_date) & (df["time_published_dt"] <= end_date)]
+        df["month"] = df["time_published_dt"].dt.strftime("%b")
+        df = df.sort_values("time_published_dt", ascending=False)
+    else:
+        df = pd.DataFrame()
 
-    for idx, label in enumerate(left_nodes, start=1):
-        y = 100 + (idx - 1) * 200
-        node_id = str(idx)
-        nodes.append({
-            "id": node_id,
-            "data": {"label": label},
-            "position": {"x": 100, "y": y},
-            "sourcePosition": "right",
-            "targetPosition": "left",
-        })
-        topic_and_ticker_ids.append((node_id, y))
+    cx, cy = 700, 500
 
-    # ---- 2. General News (centered vertically between topic/ticker nodes)
-    general_news_node_id = str(len(left_nodes) + 1)
-    center_y = sum(y for _, y in topic_and_ticker_ids) / len(topic_and_ticker_ids)
-
+    # ---- 1. Single center node combining topics + ticker
     nodes.append({
-        "id": general_news_node_id,
-        "data": {"label": "General News"},
-        "position": {"x": 300, "y": center_y},
+        "id": "center",
+        "data": {
+            "label": mindmap_data["ticker"],
+            "topics": mindmap_data["topic"],
+            "ticker": mindmap_data["ticker"],
+            "isCenterNode": True,
+        },
+        "position": {"x": cx, "y": cy},
         "sourcePosition": "right",
         "targetPosition": "left",
     })
 
-    for node_id, _ in topic_and_ticker_ids:
-        edges.append({
-            "id": f"e{node_id}-{general_news_node_id}",
-            "source": node_id,
-            "target": general_news_node_id,
-        })
+    # ---- 2. Month nodes radially around center
+    month_article_counts = df["month"].value_counts().to_dict() if not df.empty and "month" in df.columns else {}
 
-    # ---- 3. Month Nodes (based on number of articles)
-    month_article_counts = df["month"].value_counts().to_dict()
-    sorted_months = pd.date_range(
-        start=start_date, end=end_date, freq="MS"
-    ).strftime("%b").tolist()
+    first_of_start = start_date.replace(day=1)
+    sorted_months = pd.date_range(start=first_of_start, end=end_date, freq="MS").strftime("%b").tolist()
+    if not sorted_months and month_article_counts:
+        sorted_months = list(month_article_counts.keys())
 
-    max_articles = max(month_article_counts.values()) if month_article_counts else 1
-    month_spacing = 300
-
+    n_months = len(sorted_months)
+    month_radius = 300
     month_nodes = []
+
     for i, month in enumerate(sorted_months):
-        month_id = f"{general_news_node_id}-month-{i+1}"
+        angle = (2 * math.pi * i / max(n_months, 1)) - math.pi / 2
+        mx = cx + month_radius * math.cos(angle)
+        my = cy + month_radius * math.sin(angle)
+        month_id = f"month-{i+1}"
 
         count = month_article_counts.get(month, 0)
-        relative_shift = ((count / max_articles) - 0.5) * 300 if max_articles > 0 else 0
-
-        y = center_y + (i - (len(sorted_months) - 1)/2) * month_spacing + relative_shift
-
         nodes.append({
             "id": month_id,
-            "data": {"label": month},
-            "position": {"x": 500, "y": y},
-            "sourcePosition": "right",
-            "targetPosition": "left",
+            "data": {"label": f"{month} ({count})", "isMonthNode": True},
+            "position": {"x": mx, "y": my},
         })
+        edges.append({"id": f"e-center-{month_id}", "source": "center", "target": month_id})
+        month_nodes.append((month_id, month, mx, my))
 
-        edges.append({
-            "id": f"e{general_news_node_id}-{month_id}",
-            "source": general_news_node_id,
-            "target": month_id,
-        })
-
-        month_nodes.append((month_id, month, y))
-
-    # ---- 4. Article Nodes and Source Nodes
+    # ---- 3. Source + Article nodes around each month
     if not df.empty and "month" in df.columns and "source" in df.columns:
-        grouped = df.groupby(["month", "source"])
+        for month_id, month_label, mx, my in month_nodes:
+            month_df = df[df["month"] == month_label]
+            if month_df.empty:
+                continue
 
-        unique_sources = list(df["source"].unique())
+            sources = list(month_df["source"].unique())
+            n_sources = len(sources)
+            source_radius = 200
 
-        for (month, source), group in grouped:
-            matching_month_node = next((m for m, label, y in month_nodes if label == month), None)
-            if matching_month_node:
-                y_base = next((y for m, label, y in month_nodes if m == matching_month_node), 0)
-                source_y_base = y_base + 100 * (unique_sources.index(source) + 1)
+            for si, source in enumerate(sources):
+                source_angle_offset = (2 * math.pi * si / max(n_sources, 1))
+                base_angle = math.atan2(my - cy, mx - cx)
+                spread = math.pi * 0.8
+                source_angle = base_angle - spread / 2 + spread * si / max(n_sources - 1, 1) if n_sources > 1 else base_angle
 
-                source_node_id = f"{matching_month_node}-source-{source.replace(' ', '_')}"
+                sx = mx + source_radius * math.cos(source_angle)
+                sy = my + source_radius * math.sin(source_angle)
+
+                source_node_id = f"{month_id}-source-{source.replace(' ', '_')}"
+                source_df = month_df[month_df["source"] == source].sort_values("time_published_dt", ascending=False)
+                total_articles = len(source_df)
+
                 nodes.append({
                     "id": source_node_id,
-                    "data": {"label": source},
-                    "position": {"x": 700, "y": source_y_base},
-                    "sourcePosition": "right",
-                    "targetPosition": "left",
+                    "data": {
+                        "label": source,
+                        "isSourceNode": True,
+                        "articleCount": total_articles,
+                        "pageSize": 5,
+                    },
+                    "position": {"x": sx, "y": sy},
                 })
+                edges.append({"id": f"e-{month_id}-{source_node_id}", "source": month_id, "target": source_node_id})
 
-                edges.append({
-                    "id": f"e{matching_month_node}-{source_node_id}",
-                    "source": matching_month_node,
-                    "target": source_node_id,
-                })
-
-                articles = list(group.iterrows())
-                num_articles = len(articles)
-                source_index = unique_sources.index(source)
-
-                for idx, (_, row) in enumerate(articles):
+                # Article nodes around the source
+                article_radius = 140
+                for idx, (_, row) in enumerate(source_df.iterrows()):
                     article_node_id = f"{source_node_id}-article-{idx+1}"
+
+                    n_visible = min(5, total_articles)
+                    article_angle_base = math.atan2(sy - my, sx - mx)
+                    article_spread = math.pi * 0.6
+                    pos_in_page = idx % 5
+                    a_angle = article_angle_base - article_spread / 2 + article_spread * pos_in_page / max(n_visible - 1, 1) if n_visible > 1 else article_angle_base
+
+                    ax = sx + article_radius * math.cos(a_angle)
+                    ay = sy + article_radius * math.sin(a_angle)
 
                     color_map = {
                         "Bullish": "#48af00",
@@ -125,15 +119,8 @@ def build_mindmap_base(mindmap_data, articles):
                         "Somewhat-Bearish": "#e77812",
                         "Bearish": "#ff0e0e",
                     }
-                    sentiment_label = row.get("sentiment", {}).get("label", "Neutral")
+                    sentiment_label = row.get("sentiment", {}).get("label", "Neutral") if isinstance(row.get("sentiment"), dict) else "Neutral"
                     sentiment_color = color_map.get(sentiment_label, "white")
-
-                    position = get_article_position(
-                        index=idx,
-                        total_articles=num_articles,
-                        source_index=source_index,
-                        source_y_base=source_y_base
-                    )
 
                     article_data = {
                         "label": str(idx + 1),
@@ -148,20 +135,15 @@ def build_mindmap_base(mindmap_data, articles):
                         "overall_sentiment_score": row.get("overall_sentiment_score"),
                         "overall_sentiment_label": row.get("overall_sentiment_label"),
                         "ticker_sentiment": row.get("ticker_sentiment"),
+                        "sourceNodeId": source_node_id,
+                        "articleIndex": idx,
                     }
 
                     nodes.append({
                         "id": article_node_id,
                         "data": article_data,
-                        "position": position,
-                        "sourcePosition": "right",
-                        "targetPosition": "left",
+                        "position": {"x": ax, "y": ay},
                     })
+                    edges.append({"id": f"e-{source_node_id}-{article_node_id}", "source": source_node_id, "target": article_node_id})
 
-                    edges.append({
-                        "id": f"e{source_node_id}-{article_node_id}",
-                        "source": source_node_id,
-                        "target": article_node_id,
-                    })
-
-    return {"nodes": nodes, "edges": edges}
+    return {"nodes": nodes, "edges": edges, "article_count": len(df)}

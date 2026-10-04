@@ -1,220 +1,246 @@
 "use client";
 import { useState, useEffect } from "react";
-import FloatingCalendar from "../Date/FloatingCalendar";
 import DataTable, { createTheme } from "react-data-table-component";
 import { useRouter } from "next/navigation";
-import DropDown from "../DropDown/DropDown";
-import TickerDropDown from "../DropDown/TickerDropDown";
-import { startPollingStatus, stopPollingStatus } from "../utils/statusPolling";
 
 import {
   handleAddRow,
+  handleEdit,
   handleSave,
+  handleCancelEdit,
   handleDelete,
 } from "../utils/dashboardHandlers";
-import { getButtonStyle } from "./buttonStyles";
-import { TOPICS, TICKERS } from "../../constants/UserDashboard";
+
+const statusConfig = {
+  New: { label: "New", bg: "rgba(148,163,184,0.15)", color: "#94a3b8", border: "rgba(148,163,184,0.3)" },
+  "In-Progress": { label: "In-Progress", bg: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "rgba(245,158,11,0.3)" },
+  Published: { label: "Published", bg: "rgba(16,185,129,0.15)", color: "#10b981", border: "rgba(16,185,129,0.3)" },
+};
 
 const DashboardTable = () => {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [calendarPosition, setCalendarPosition] = useState({ top: 0, left: 0 });
-  const [openCalendarRowId, setOpenCalendarRowId] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [newRowData, setNewRowData] = useState({
-    topic: "",
-    ticker: "",
-    range: { startDate: "", endDate: "" },
-  });
+  const [editMode, setEditMode] = useState(null); // "create" | "edit"
+  const [newRowData, setNewRowData] = useState({ name: "", description: "" });
 
   useEffect(() => {
     const fetchMindmaps = async () => {
       try {
         const res = await fetch("http://localhost:8000/api/mindmaps");
         const mindmaps = await res.json();
-
-        if (Array.isArray(mindmaps)) {
-          setData(mindmaps);
-
-          mindmaps.forEach((row) => {
-            if (row.status === "pending" || row.status === "processing") {
-              startPollingStatus(row.id);
-            }
-          });
-        } else {
-          console.error("Mindmaps response is not an array!", mindmaps);
-          setData([]);
-        }
+        setData(Array.isArray(mindmaps) ? mindmaps : []);
       } catch (error) {
         console.error("Failed to fetch mindmaps:", error);
         setData([]);
+      } finally {
+        setLoading(false);
       }
     };
-
     fetchMindmaps();
   }, []);
 
+  const isFormComplete = newRowData.name.trim().length > 0;
+
   const columns = [
     {
-      name: "Topic",
-      selector: (row) => row.topic?.join(", "),
+      name: "Name",
+      selector: (row) => row.name,
       cell: (row) =>
         row.id === editingId ? (
-          <DropDown
-            options={TOPICS}
-            value={newRowData.topic}
-            onChange={(selectedOptions) =>
-              setNewRowData({ ...newRowData, topic: selectedOptions })
+          <input
+            type="text"
+            placeholder="Mindmap name..."
+            value={newRowData.name}
+            onChange={(e) =>
+              setNewRowData((prev) => ({ ...prev, name: e.target.value }))
             }
+            style={{
+              background: "rgba(30,41,59,0.8)",
+              border: "1px solid rgba(59,130,246,0.4)",
+              borderRadius: "6px",
+              padding: "8px 12px",
+              color: "#e2e8f0",
+              fontSize: "13px",
+              width: "100%",
+              outline: "none",
+            }}
+            autoFocus
           />
-        ) : row.topic ? (
-          row.topic.join(", ")
         ) : (
-          ""
+          <span style={{ color: "#f1f5f9", fontWeight: 600, fontSize: "14px" }}>
+            {row.name || "Untitled"}
+          </span>
         ),
+      grow: 1.5,
     },
     {
-      name: "Ticker",
-      selector: (row) => row.ticker,
+      name: "Description",
+      selector: (row) => row.description,
       cell: (row) =>
         row.id === editingId ? (
-          <TickerDropDown
-            options={TICKERS}
-            value={newRowData.ticker}
-            onChange={(selectedOption) =>
-              setNewRowData({ ...newRowData, ticker: selectedOption })
+          <input
+            type="text"
+            placeholder="Description (optional)..."
+            value={newRowData.description}
+            onChange={(e) =>
+              setNewRowData((prev) => ({ ...prev, description: e.target.value }))
             }
+            style={{
+              background: "rgba(30,41,59,0.8)",
+              border: "1px solid rgba(148,163,184,0.3)",
+              borderRadius: "6px",
+              padding: "8px 12px",
+              color: "#e2e8f0",
+              fontSize: "13px",
+              width: "100%",
+              outline: "none",
+            }}
           />
         ) : (
-          row.ticker
+          <span style={{ color: "#94a3b8", fontSize: "13px" }}>
+            {row.description || "—"}
+          </span>
         ),
-    },
-    {
-      name: "Date Range",
-      selector: (row) => row.range,
-      cell: (row) => (
-        <div style={{ position: "relative", minHeight: "40px" }}>
-          {row.id === editingId ? (
-            <>
-              <button
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#214f95",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  width: "160px",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const rect = e.target.getBoundingClientRect();
-                  setCalendarPosition({
-                    top: rect.bottom + window.scrollY,
-                    left: rect.left + window.scrollX,
-                  });
-                  setOpenCalendarRowId(row.id);
-                }}
-              >
-                {row.range?.startDate && row.range?.endDate
-                  ? `${new Date(
-                      row.range.startDate
-                    ).toLocaleDateString()} - ${new Date(
-                      row.range.endDate
-                    ).toLocaleDateString()}`
-                  : "Select Date Range"}
-              </button>
-
-              {openCalendarRowId === row.id && (
-                <FloatingCalendar
-                  position={calendarPosition}
-                  value={
-                    typeof row.range === "object" && row.range !== null
-                      ? row.range
-                      : { startDate: "", endDate: "" }
-                  }
-                  onChange={(range) => {
-                    setData((prev) =>
-                      prev.map((r) =>
-                        r.id === row.id ? { ...r, range: range } : r
-                      )
-                    );
-
-                    if (row.id === editingId) {
-                      setNewRowData((prev) => ({
-                        ...prev,
-                        range: range,
-                      }));
-                    }
-
-                    setOpenCalendarRowId(null);
-                  }}
-                  onClose={() => setOpenCalendarRowId(null)}
-                />
-              )}
-            </>
-          ) : row.range && row.range.startdate && row.range.enddate ? ( // ✅ FIXED: small caps
-            `${new Date(row.range.startdate).toLocaleDateString()} - ${new Date(
-              row.range.enddate
-            ).toLocaleDateString()}`
-          ) : (
-            ""
-          )}
-        </div>
-      ),
+      grow: 2,
     },
     {
       name: "Status",
       selector: (row) => row.status,
-      cell: (row) => <span>{row.status}</span>,
+      cell: (row) => {
+        if (row.id === editingId) return null;
+        const cfg = statusConfig[row.status] || statusConfig.New;
+        return (
+          <span
+            style={{
+              background: cfg.bg,
+              color: cfg.color,
+              border: `1px solid ${cfg.border}`,
+              padding: "4px 12px",
+              borderRadius: "20px",
+              fontSize: "12px",
+              fontWeight: 600,
+            }}
+          >
+            {cfg.label}
+          </span>
+        );
+      },
+      width: "130px",
+    },
+    {
+      name: "Nodes",
+      selector: (row) => row.node_count,
+      cell: (row) =>
+        row.id === editingId ? null : (
+          <span style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "13px" }}>
+            {row.node_count ?? 0}
+          </span>
+        ),
+      width: "80px",
+    },
+    {
+      name: "Articles",
+      selector: (row) => row.article_count,
+      cell: (row) =>
+        row.id === editingId ? null : (
+          <span style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "13px" }}>
+            {row.article_count ?? 0}
+          </span>
+        ),
+      width: "90px",
     },
     {
       name: "Actions",
       cell: (row) =>
         row.id === editingId ? (
-          <button
-            onClick={() =>
-              handleSave(
-                row.id,
-                newRowData,
-                setData,
-                setEditingId,
-                setNewRowData
-              )
-            }
-          >
-            Save
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              disabled={!isFormComplete}
+              onClick={() =>
+                handleSave(row.id, newRowData, setData, setEditingId, setNewRowData, editMode)
+              }
+              style={{
+                padding: "8px 20px",
+                background: isFormComplete
+                  ? "linear-gradient(135deg, #10b981, #059669)"
+                  : "rgba(100,100,100,0.3)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                cursor: isFormComplete ? "pointer" : "not-allowed",
+                opacity: isFormComplete ? 1 : 0.5,
+                fontWeight: 600,
+                fontSize: "13px",
+              }}
+            >
+              {editMode === "edit" ? "Save" : "Create"}
+            </button>
+            <button
+              onClick={() =>
+                handleCancelEdit(editingId, editMode, setData, setEditingId, setNewRowData)
+              }
+              style={{
+                padding: "8px 16px",
+                background: "rgba(239,68,68,0.1)",
+                color: "#f87171",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "13px",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         ) : (
           <div style={{ display: "flex", gap: "8px" }}>
             <button
-              disabled={row.status !== "done"}
-              style={getButtonStyle({
-                type: "view",
-                disabled: row.status !== "done",
-              })}
-              onClick={() => {
-                if (row.status === "done") {
-                  router.push(`/mindmaps?id=${row.id}`);
-                }
+              style={{
+                padding: "7px 16px",
+                borderRadius: "8px",
+                border: "none",
+                color: "#fff",
+                cursor: "pointer",
+                background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+                fontWeight: 600,
+                fontSize: "12px",
               }}
+              onClick={() => router.push(`/mindmaps?id=${row.id}`)}
             >
               View
             </button>
-
             <button
-              style={getButtonStyle({ type: "delete" })}
-              onClick={async () => {
-                stopPollingStatus(row.id);
-                const deleted = await handleDelete(row.id, setData);
-                if (!deleted) {
-                  startPollingStatus(row.id, setData);
-                }
+              style={{
+                padding: "7px 16px",
+                borderRadius: "8px",
+                border: "1px solid rgba(148,163,184,0.3)",
+                color: "#94a3b8",
+                cursor: "pointer",
+                background: "rgba(148,163,184,0.1)",
+                fontWeight: 600,
+                fontSize: "12px",
               }}
+              onClick={() =>
+                handleEdit(row, editingId, setEditingId, setNewRowData, setEditMode)
+              }
+            >
+              Edit
+            </button>
+            <button
+              style={{
+                padding: "7px 16px",
+                borderRadius: "8px",
+                border: "1px solid rgba(239,68,68,0.3)",
+                color: "#f87171",
+                cursor: "pointer",
+                background: "rgba(239,68,68,0.1)",
+                fontWeight: 600,
+                fontSize: "12px",
+              }}
+              onClick={() => handleDelete(row.id, setData)}
             >
               Delete
             </button>
@@ -224,99 +250,136 @@ const DashboardTable = () => {
   ];
 
   createTheme(
-    "solarized",
+    "dark-modern",
     {
-      text: {
-        primary: "#ffffff",
-        secondary: "#2aa198",
-      },
-      background: {
-        default: "rgba(33, 79, 149, 0.5)",
-      },
-      context: {
-        background: "#cb4b16",
-        text: "#FFFFFF",
-      },
-      divider: {
-        default: "#073642",
-      },
+      text: { primary: "#e2e8f0", secondary: "#94a3b8" },
+      background: { default: "transparent" },
+      context: { background: "#1e40af", text: "#fff" },
+      divider: { default: "rgba(148,163,184,0.1)" },
       action: {
-        button: "rgba(0,0,0,.54)",
-        hover: "rgba(0,0,0,.08)",
-        disabled: "rgba(0,0,0,.12)",
-      },
-      row: {
-        background: "rgba(33, 79, 149, 0.5)",
-        text: "#FFFFFF",
-      },
-      newRow: {
-        background: "rgba(33, 79, 149, 0.5)",
-        text: "#FFFFFF",
+        button: "rgba(255,255,255,.54)",
+        hover: "rgba(255,255,255,.08)",
+        disabled: "rgba(255,255,255,.12)",
       },
     },
     "dark"
   );
 
+  const customStyles = {
+    table: { style: { backgroundColor: "transparent" } },
+    headRow: {
+      style: {
+        backgroundColor: "rgba(15,23,42,0.6)",
+        borderBottom: "1px solid rgba(148,163,184,0.15)",
+        minHeight: "48px",
+      },
+    },
+    headCells: {
+      style: {
+        color: "#94a3b8",
+        fontSize: "11px",
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+      },
+    },
+    rows: {
+      style: {
+        backgroundColor: "rgba(15,23,42,0.3)",
+        borderBottom: "1px solid rgba(148,163,184,0.08)",
+        minHeight: "56px",
+        "&:hover": { backgroundColor: "rgba(30,58,138,0.3)" },
+      },
+    },
+    cells: { style: { color: "#e2e8f0", fontSize: "13px" } },
+    pagination: {
+      style: {
+        backgroundColor: "transparent",
+        color: "#94a3b8",
+        borderTop: "1px solid rgba(148,163,184,0.15)",
+      },
+      pageButtonsStyle: {
+        color: "#94a3b8",
+        fill: "#94a3b8",
+        "&:hover": { backgroundColor: "rgba(59,130,246,0.2)" },
+      },
+    },
+  };
+
   return (
     <div>
-      <button
-        onClick={() =>
-          handleAddRow(data, editingId, setData, setEditingId, setNewRowData)
-        }
+      <div
         style={{
-          marginBottom: "1rem",
-          background:
-            "linear-gradient(to right, rgba(33,79,149,0.7), rgba(85,150,255,0.6))",
-          color: "#fff",
-          border: "none",
-          padding: "10px 20px",
-          borderRadius: "10px",
-          fontSize: "16px",
-          fontWeight: "bold",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          backdropFilter: "blur(4px)",
-          transition: "background 0.3s ease",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
         }}
-        onMouseOver={(e) =>
-          (e.currentTarget.style.background =
-            "linear-gradient(to right, rgba(33,79,149,0.9), rgba(85,150,255,0.8))")
-        }
-        onMouseOut={(e) =>
-          (e.currentTarget.style.background =
-            "linear-gradient(to right, rgba(33,79,149,0.7), rgba(85,150,255,0.6))")
-        }
       >
-        + Add Mindmap
-      </button>
-
-      {loading && (
-        <div
+        <div>
+          <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#f1f5f9" }}>
+            Your Mindmaps
+          </h2>
+          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
+            Create and manage your financial mindmaps
+          </p>
+        </div>
+        <button
+          onClick={() =>
+            handleAddRow(data, editingId, setData, setEditingId, setNewRowData, setEditMode)
+          }
           style={{
-            textAlign: "center",
-            marginBottom: "1rem",
-            color: "#00ff88",
+            background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+            color: "#fff",
+            border: "none",
+            padding: "10px 22px",
+            borderRadius: "10px",
+            fontSize: "14px",
+            fontWeight: 600,
+            cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(59,130,246,0.3)",
+            transition: "all 0.2s ease",
           }}
+          onMouseOver={(e) =>
+            (e.currentTarget.style.boxShadow = "0 6px 20px rgba(59,130,246,0.45)")
+          }
+          onMouseOut={(e) =>
+            (e.currentTarget.style.boxShadow = "0 4px 14px rgba(59,130,246,0.3)")
+          }
         >
+          + Add Mindmap
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#64748b", fontSize: "14px" }}>
           Loading mindmaps...
         </div>
+      ) : (
+        <div
+          style={{
+            background: "rgba(15,23,42,0.5)",
+            borderRadius: "12px",
+            border: "1px solid rgba(148,163,184,0.1)",
+            overflow: "hidden",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <DataTable
+            columns={columns}
+            data={data}
+            pagination
+            highlightOnHover
+            theme="dark-modern"
+            customStyles={customStyles}
+            noDataComponent={
+              <div style={{ padding: "48px", color: "#64748b", fontSize: "14px", textAlign: "center" }}>
+                No mindmaps yet. Click &quot;+ Add Mindmap&quot; to get started.
+              </div>
+            }
+          />
+        </div>
       )}
-
-      <div style={{ overflow: "visible", position: "relative" }}>
-        <DataTable
-          title={
-            <span style={{ fontWeight: "bold", fontSize: "18px" }}>
-              Your Mindmaps
-            </span>
-          }
-          columns={columns}
-          data={data}
-          pagination
-          highlightOnHover
-          striped
-          theme="solarized"
-        />
-      </div>
     </div>
   );
 };

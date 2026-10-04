@@ -9,26 +9,25 @@ const CollapseButton = ({ collapsed, onToggle }) => {
       style={{
         position: "absolute",
         top: "12px",
-        right: "20px",
-        left: collapsed ? "5px" : "18px",
-        transform: collapsed ? "none" : "translateX(-50%)",
-        width: "32px",
-        height: "32px",
-        backgroundColor: "#6C63FF",
-        color: "#fff",
-        border: "none",
-        borderRadius: "50%",
+        left: collapsed ? "50%" : "12px",
+        transform: collapsed ? "translateX(-50%)" : "none",
+        width: "28px",
+        height: "28px",
+        backgroundColor: "rgba(59,130,246,0.2)",
+        color: "#93c5fd",
+        border: "1px solid rgba(59,130,246,0.3)",
+        borderRadius: "6px",
         cursor: "pointer",
-        fontSize: "16px",
+        fontSize: "14px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
         zIndex: 100,
+        transition: "all 0.2s ease",
       }}
       title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
     >
-      {collapsed ? "<" : ">"}
+      {collapsed ? "‹" : "›"}
     </button>
   );
 };
